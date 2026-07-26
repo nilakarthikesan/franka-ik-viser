@@ -1,0 +1,5 @@
+viser>=1.0
+pin>=2.7          # Pinocchio: FK, Jacobians, SE(3) math
+yourdfpy>=1.5     # URDF parsing (used by viser.extras.ViserUrdf)
+numpy>=1.26
+matplotlib>=3.8   # tracking-error plots
