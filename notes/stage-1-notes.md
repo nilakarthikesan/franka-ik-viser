@@ -237,7 +237,41 @@ the risky choice comes bundled with the plan that de-risks it.
 
 ---
 
-## 7. Where this stage hands off
+## 7. Results: what actually happened when we built and tested this stage
+
+Stage 1 was built and verified (milestones M0 + M1, commit `5429b2e`). The plan held,
+but reality added four lessons worth recording — each an instance of the risk framework
+doing its job:
+
+1. **Version pins must be checked, not assumed.** The scaffold's `yourdfpy>=1.5` pin
+   was fiction — yourdfpy versions as 0.0.x (we got 0.0.60). And PyRoKi isn't on PyPI
+   at all; it installs from its GitHub repo (`pyroki @ git+...` in requirements.txt).
+2. **The "URDF generation friction" risk materialized exactly as predicted, in a new
+   form.** franka_description's xacro files call ROS's `$(find franka_description)`,
+   which needs `ament_index_python` — a ROS package that pip can't install. Fix:
+   [scripts/generate_urdf.py](../scripts/generate_urdf.py) shims the one function xacro
+   actually calls, runs Franka's official generator unmodified, then rewrites the 20
+   `package://` mesh URIs to relative paths. No ROS, no Docker, fully reproducible.
+3. **Relative paths are relative to *something* — always ask what.** yourdfpy resolves
+   mesh paths against the process working directory unless you pass
+   `mesh_dir=<urdf folder>`. Symptom: kinematics parsed fine but zero meshes loaded.
+   Now baked into every loader call.
+4. **Verification caught nothing wrong with the data itself** — which is also
+   information. [scripts/verify_setup.py](../scripts/verify_setup.py) confirmed every
+   claim in these notes against the real URDF: exactly 7 revolute arm joints (+2
+   prismatic finger joints to exclude), limits on all joints (joint 4 is indeed
+   asymmetric: [-3.08, -0.12] rad; joint 6 too: [+0.44, +4.62]), `fr3_hand_tcp`
+   present, 37 mesh geometries resolved, and home-pose FK at [0.307, 0, 0.487] m —
+   |p| = 0.576 m, mid-workspace as designed.
+
+M1 was verified end to end in the browser: the FR3 renders in Viser with one slider
+per joint (bounded by the real limits), and driving `fr3_joint1` to 1.5 rad visibly
+swings the arm about the base axis ([scripts/render_m1.py](../scripts/render_m1.py)).
+
+Environment as-built: Python 3.12 venv (Homebrew), viser 1.0.30, yourdfpy 0.0.60,
+numpy 2.5.1, matplotlib, PyRoKi + JAX. No conda — decision D1's pure-pip claim held.
+
+## 8. Where this stage hands off
 
 With the problem understood, the pipeline ahead is:
 
