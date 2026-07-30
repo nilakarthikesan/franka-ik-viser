@@ -21,6 +21,9 @@ python scripts/generate_urdf.py
 # Check the setup (URDF data, joints, limits, EE frame, meshes)
 python scripts/verify_setup.py
 
+# Validate the from-scratch kinematics (FK/Jacobian vs yourdfpy, PyRoKi, FD)
+python scripts/validate_kinematics.py
+
 # M1: render the arm with joint sliders (opens a Viser tab in your browser)
 python scripts/render_m1.py
 
@@ -32,7 +35,7 @@ python -m franka_ik.app
 
 - [x] M0 environment + URDF generated (`scripts/generate_urdf.py`, `scripts/verify_setup.py`)
 - [x] M1 robot renders in Viser with joint sliders (`scripts/render_m1.py`)
-- [ ] M2 FK/Jacobian implemented + validated vs. PyRoKi
+- [x] M2 from-scratch FK/Jacobian validated: 9/9 checks vs. yourdfpy, PyRoKi, finite differences, scipy (`scripts/validate_kinematics.py`)
 - [ ] M3 static-target IK converges
 - [ ] M4 trajectory tracking (circle / figure-8)
 - [ ] M5 interactive gizmo mode

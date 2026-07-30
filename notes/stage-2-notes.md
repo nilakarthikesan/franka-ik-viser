@@ -188,3 +188,61 @@ A-C (D optional) and `robot_model.py` has no remaining `NotImplementedError`. Th
 solver stage then consumes exactly three guarantees established here: `fk` is truth,
 `jacobian` matches `fk` differentially, and `pose_error` speaks the same frame
 convention as `jacobian`. Everything hard about M3 will be tuning, not correctness.
+
+---
+
+## 8. Results: built, tested, and one real bug caught
+
+M2 is implemented ([robot_model.py](../src/franka_ik/robot_model.py)) and validated
+([scripts/validate_kinematics.py](../scripts/validate_kinematics.py)). Two checks were
+added beyond the plan: **E** (rotation helpers vs. scipy on structured edge cases —
+identity, angles down to 1e-12, near/at π) and **F** (first-order consistency
+`e(fk(q), fk(q+δ)) ≈ J(q)δ` — a direct test of the §3 convention contract the IK
+solver will rely on).
+
+Final table, over 112 configurations (100 random in-limit + home, both limit corners,
+mid-range, and 8 random limit-corner combinations near singular folds):
+
+```
+PASS  E1 rotation_about_axis vs scipy          1.221e-15 < 1e-12
+PASS  E2 rotvec_from_matrix vs scipy           2.124e-14 < 1e-09
+PASS  A  position   (vs yourdfpy)              4.475e-16 < 1e-06
+PASS  A  rotation   (vs yourdfpy)              3.416e-16 < 1e-06
+PASS  B  position   (vs PyRoKi)                6.693e-16 < 1e-06
+PASS  B  rotation   (vs PyRoKi)                1.161e-15 < 1e-06
+PASS  C  jacobian   (vs finite differences)    2.752e-10 < 1e-05
+PASS  D  jacobian   (vs PyRoKi jax.jacfwd)     8.882e-16 < 1e-05
+PASS  F  error-vs-J first-order (relative)     5.827e-06 < 1e-04
+9/9 checks passed
+```
+
+FK agrees with both independent references at machine precision (~1e-15/1e-16), i.e.
+bit-for-bit up to float64 roundoff — stronger than the 1e-6 bar we set.
+
+**The validation earned its keep: check E2 failed on the first run** (max error
+8.1e-5 rad). Probing showed the worst case at θ = π − 1.08e-6 — *just outside* the
+1e-6 cutoff of the original near-π branch, in the main formula's territory. Lesson:
+the ill-conditioned window of θ/(2 sin θ)·vee(R−Rᵀ) around π is *wide* (catastrophic
+cancellation in R−Rᵀ as sin θ → 0), not a point. Fix (in `rotvec_from_matrix`):
+switch branches at θ > 3 rad, and make the near-π branch well-conditioned end to end —
+axis from the symmetric part, (R+Rᵀ)/2 − cos θ·I = (1−cos θ)aaᵀ, and angle from
+θ = π − arcsin(|vee|) (arcsin is well-conditioned exactly where arccos is not).
+After the fix: 2.1e-14 across the same cases. Had E2 not existed, this bug would
+have surfaced — untraceably — as an IK solver that misconverges only for targets
+requiring a near-π reorientation.
+
+Other implementation notes for the record:
+
+- PyRoKi confirmed our two API predictions: `actuated_names` is 8 long
+  (`fr3_joint1..7` + `fr3_finger_joint1`, the mimic folded away), and joint order
+  matches ours, mapped by name anyway rather than by position.
+- JAX must be switched to float64 (`jax.config.update("jax_enable_x64", True)`)
+  before importing PyRoKi, or checks B/D would be capped at float32 noise (~1e-6).
+- Check D's quaternion-derivative-to-angular-velocity map
+  ω = 2·Im(∂q/∂qᵢ ⊗ q⁻¹) worked as derived — agreement at 1e-16.
+- Integration with Stage 1 re-verified after the change: `verify_setup.py` still
+  passes, the M1 render server still serves, and our `fk(q_home)` reproduces
+  Stage 1's yourdfpy number exactly ([0.307, 0, 0.4869] m).
+
+Design risk "our FK/Jacobian is wrong" is retired. M3 (the DLS solver) can now treat
+`fk`, `jacobian`, and `pose_error` as ground truth.
