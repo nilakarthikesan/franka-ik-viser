@@ -1,5 +1,5 @@
-viser>=1.0
-pin>=2.7          # Pinocchio: FK, Jacobians, SE(3) math
-yourdfpy>=1.5     # URDF parsing (used by viser.extras.ViserUrdf)
-numpy>=1.26
-matplotlib>=3.8   # tracking-error plots
+viser>=1.0            # browser 3D visualization (ViserUrdf, gizmo, GUI)
+yourdfpy>=0.0.56      # URDF parsing: joint origins, axes, limits (also used by ViserUrdf)
+numpy>=1.26           # all kinematics math: FK, Jacobian, DLS solve
+matplotlib>=3.8       # tracking-error plots
+pyroki @ git+https://github.com/chungmin99/pyroki.git  # validation only: independent FK/Jacobian cross-check (D1)
