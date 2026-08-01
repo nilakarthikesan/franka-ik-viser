@@ -4,7 +4,23 @@ Inverse kinematics on a Franka FR3 arm, implemented from scratch (damped least s
 and visualized live in [Viser](https://viser.studio). The end effector tracks sampled
 SE(3) reference trajectories, or an interactive drag gizmo.
 
-See [DESIGN.md](DESIGN.md) for the full system design.
+See [DESIGN.md](DESIGN.md) for the system design and [REPORT.md](REPORT.md) for the
+end-to-end writeup (approach, results, references).
+
+## Demo
+
+The arm tracking a circle on both drawing surfaces — `table` (flat, gripper down) and
+`wall` (upright, gripper forward). Blue = reference, orange = the live end-effector
+trace, red = the gripper "pen" axis pointing into the drawing plane:
+
+![tracking demo](docs/images/tracking.gif)
+
+Tracking error stays at **micrometre scale** the whole loop (max 0.008 mm on `table`,
+0.031 mm on `wall`):
+
+| `table` (XY plane) | `wall` (YZ plane) |
+|---|---|
+| ![table plot](docs/images/tracking_circle-table.png) | ![wall plot](docs/images/tracking_circle-wall.png) |
 
 ## Quickstart
 
@@ -40,6 +56,9 @@ PYTHONPATH=src python -m franka_ik.app
 
 # Record tracking-error artifacts (CSV + plots in outputs/) for every shape x surface
 PYTHONPATH=src python -m franka_ik.record --all --periods 2
+
+# Render the tracking demo GIF (both surfaces) into docs/images/tracking.gif
+PYTHONPATH=src python scripts/record_gif.py --shape circle --surfaces table wall
 ```
 
 > The `franka_ik` package lives under `src/`. The `scripts/*.py` add it to the path
@@ -54,4 +73,4 @@ PYTHONPATH=src python -m franka_ik.record --all --periods 2
 - [x] M3 DLS solver: 50/50 static targets < 1 mm / 0.5 deg; circle tracking at 0.006 mm max error, 12/12 tests (`scripts/test_ik.py`)
 - [x] M4 trajectory tracking (circle / figure-8 / lissajous on `table`/`wall` surfaces): 18/18 tests, all 12 combos < 0.031 mm / 0.005 deg (`scripts/test_trajectory.py`, `src/franka_ik/{trajectory,app}.py`)
 - [x] M5 interactive gizmo mode + live traces, tuning sliders, error readout, selectable drawing surface (`src/franka_ik/visualizer.py`)
-- [ ] M6 recording + writeup (recorder done: `src/franka_ik/record.py` -> `outputs/`)
+- [x] M6 artifact + writeup: tracking GIF (`scripts/record_gif.py`), error plots embedded above, full report in [REPORT.md](REPORT.md)

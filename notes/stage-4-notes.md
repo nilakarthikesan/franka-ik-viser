@@ -143,6 +143,11 @@ Built the three stubs plus the recorder: `trajectory.py`, `visualizer.py`, `app.
 
 ### Isolated + pipeline tests (`scripts/test_trajectory.py`, 11/11)
 
+> Note: this is the original single-surface run. §9 (drawing surfaces) supersedes it —
+> the suite now loops **both** `table` and `wall` for every check and adds TR5
+> (pen-into-plane geometry), for **18/18** total. The numbers below still hold for the
+> `table` surface.
+
 ```
 TR1 valid SE(3):   max orthonormality/det error = 8.88e-16
 TR2 continuity:    max per-frame 2.75 mm / 0.172 deg   (smooth at 50 Hz)
