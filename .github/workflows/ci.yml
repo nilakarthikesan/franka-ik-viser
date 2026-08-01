@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gates:
+    name: Kinematics + IK + trajectory gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch franka_description and generate the FR3 URDF (M0)
+        run: |
+          git clone --depth 1 https://github.com/frankarobotics/franka_description \
+            assets/franka_description
+          python scripts/generate_urdf.py
+
+      - name: M2 - validate FK + Jacobian (vs yourdfpy, PyRoKi, finite differences)
+        run: python scripts/validate_kinematics.py
+
+      - name: M3 - DLS IK solver (static convergence, singularities, limits, tracking)
+        run: python scripts/test_ik.py
+
+      - name: M4/M5 - trajectories x surfaces + end-to-end tracking
+        env:
+          PYTHONPATH: src
+        run: python scripts/test_trajectory.py
