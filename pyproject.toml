@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "franka-ik-viser"
+version = "0.1.0"
+description = "From-scratch damped least-squares IK on a Franka FR3, visualized in Viser"
+requires-python = ">=3.10"
+
+# Runtime dependencies are pinned in requirements.txt (pip install -r); they are
+# intentionally not duplicated here. This file exists so the src/ layout is
+# importable as `franka_ik` via `pip install -e .`.
+
+[tool.setuptools.packages.find]
+where = ["src"]

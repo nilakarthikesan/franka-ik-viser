@@ -30,9 +30,19 @@ python scripts/test_ik.py
 # M1: render the arm with joint sliders (opens a Viser tab in your browser)
 python scripts/render_m1.py
 
-# Run the IK demo (coming with M3+)
-python -m franka_ik.app
+# Test trajectories + end-to-end tracking (reachability, continuity, error bars)
+python scripts/test_trajectory.py
+
+# Run the live IK demo (opens a Viser tab: playback + interactive gizmo modes)
+PYTHONPATH=src python -m franka_ik.app
+
+# Record tracking-error artifacts (CSV + plots in outputs/) for every trajectory
+PYTHONPATH=src python -m franka_ik.record --all --periods 2
 ```
+
+> The `franka_ik` package lives under `src/`. The `scripts/*.py` add it to the path
+> automatically; for the `python -m franka_ik.*` entry points use `PYTHONPATH=src` as
+> shown (or `pip install -e .`, which also works in non-iCloud-synced checkouts).
 
 ## Status
 
@@ -40,6 +50,6 @@ python -m franka_ik.app
 - [x] M1 robot renders in Viser with joint sliders (`scripts/render_m1.py`)
 - [x] M2 from-scratch FK/Jacobian validated: 9/9 checks vs. yourdfpy, PyRoKi, finite differences, scipy (`scripts/validate_kinematics.py`)
 - [x] M3 DLS solver: 50/50 static targets < 1 mm / 0.5 deg; circle tracking at 0.006 mm max error, 12/12 tests (`scripts/test_ik.py`)
-- [ ] M4 trajectory tracking (circle / figure-8)
-- [ ] M5 interactive gizmo mode
-- [ ] M6 recording + writeup
+- [x] M4 trajectory tracking (circle / figure-8 / lissajous): 11/11 tests, all paths < 0.011 mm / 0.001 deg (`scripts/test_trajectory.py`, `src/franka_ik/{trajectory,app}.py`)
+- [x] M5 interactive gizmo mode + live traces, tuning sliders, error readout (`src/franka_ik/visualizer.py`)
+- [ ] M6 recording + writeup (recorder done: `src/franka_ik/record.py` -> `outputs/`)
