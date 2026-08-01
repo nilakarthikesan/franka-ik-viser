@@ -24,6 +24,9 @@ python scripts/verify_setup.py
 # Validate the from-scratch kinematics (FK/Jacobian vs yourdfpy, PyRoKi, FD)
 python scripts/validate_kinematics.py
 
+# Test the DLS IK solver (static convergence, singularities, limits, tracking)
+python scripts/test_ik.py
+
 # M1: render the arm with joint sliders (opens a Viser tab in your browser)
 python scripts/render_m1.py
 
@@ -36,7 +39,7 @@ python -m franka_ik.app
 - [x] M0 environment + URDF generated (`scripts/generate_urdf.py`, `scripts/verify_setup.py`)
 - [x] M1 robot renders in Viser with joint sliders (`scripts/render_m1.py`)
 - [x] M2 from-scratch FK/Jacobian validated: 9/9 checks vs. yourdfpy, PyRoKi, finite differences, scipy (`scripts/validate_kinematics.py`)
-- [ ] M3 static-target IK converges
+- [x] M3 DLS solver: 50/50 static targets < 1 mm / 0.5 deg; circle tracking at 0.006 mm max error, 12/12 tests (`scripts/test_ik.py`)
 - [ ] M4 trajectory tracking (circle / figure-8)
 - [ ] M5 interactive gizmo mode
 - [ ] M6 recording + writeup
