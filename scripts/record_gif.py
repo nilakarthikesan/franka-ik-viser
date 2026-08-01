@@ -27,17 +27,47 @@ from franka_ik.trajectory import period_of, pose, reference_points
 
 VIEW = dict(elev=18, azim=-60)
 XLIM, YLIM, ZLIM = (-0.1, 0.6), (-0.35, 0.35), (0.0, 0.75)
+TITLES = {"table": "table — draw flat, gripper down",
+          "wall": "wall — draw upright, gripper forward"}
 
 
-def simulate(model, shape, surface, frames):
-    """One loop of solve_step tracking; return skeletons, tcp trace, pen axes, errors."""
+def draw_panel(ax, sim, ref, k, surface, legend=False):
+    """Render one frame of a surface into a 3D axis: reference, trace, arm, pen."""
+    skels, trace, pens, errs = sim
+    ax.clear()
+    ax.plot(ref[:, 0], ref[:, 1], ref[:, 2], color="#4aa0ff", lw=2, label="reference")
+    tr = trace[: k + 1]
+    ax.plot(tr[:, 0], tr[:, 1], tr[:, 2], color="#ff7828", lw=2.5, label="EE trace")
+    sk = skels[k]
+    ax.plot(sk[:, 0], sk[:, 1], sk[:, 2], "-o", color="#333", ms=3, lw=2, label="arm")
+    ax.scatter([0], [0], [0], color="k", s=30)
+    tip, pen = trace[k], pens[k]
+    e = tip + 0.06 * pen
+    ax.plot([tip[0], e[0]], [tip[1], e[1]], [tip[2], e[2]], color="#d62728", lw=2,
+            label="gripper 'pen'")
+    ax.set_xlim(*XLIM); ax.set_ylim(*YLIM); ax.set_zlim(*ZLIM)
+    ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_zlabel("z")
+    ax.view_init(**VIEW)
+    ax.set_title(f"{TITLES.get(surface, surface)}\nerr {errs[k]*1e3:.3f} mm", fontsize=9)
+    if legend:
+        ax.legend(loc="upper left", fontsize=7)
+
+
+HZ = 50.0
+
+
+def simulate(model, shape, surface):
+    """One loop tracked at the true ~50 Hz app rate (so errors are realistic).
+
+    Returns full-resolution arrays; the GIF/stills subsample evenly from them.
+    """
     solver = DLSSolver(model, IKConfig())
     period = period_of(shape)
+    n = int(period * HZ)
     q = solver.solve(Q_HOME, pose(shape, surface, 0.0)).q  # seed on-path (as app converges)
     skels, trace, pens, errs = [], [], [], []
-    for k in range(frames):
-        t = period * k / frames
-        T = pose(shape, surface, t)
+    for k in range(n):
+        T = pose(shape, surface, k / HZ)
         q = solver.solve_step(q, T)
         fk = model.fk_all(q)
         tcp = fk.T_tcp[:3, 3]
@@ -55,6 +85,9 @@ def main() -> None:
     ap.add_argument("--frames", type=int, default=90)
     ap.add_argument("--fps", type=int, default=18)
     ap.add_argument("--out", default="docs/images/tracking.gif")
+    ap.add_argument("--stills-dir", default=None,
+                    help="if set, also save N walkthrough PNGs for surfaces[0] here")
+    ap.add_argument("--n-stills", type=int, default=6)
     args = ap.parse_args()
 
     import matplotlib
@@ -63,38 +96,35 @@ def main() -> None:
     import imageio.v2 as imageio
 
     model = FrankaModel()
-    sims = {s: simulate(model, args.shape, s, args.frames) for s in args.surfaces}
+    sims = {s: simulate(model, args.shape, s) for s in args.surfaces}
     refs = {s: reference_points(args.shape, s) for s in args.surfaces}
+    n_sim = len(next(iter(sims.values()))[1])  # full-resolution length
+
+    if args.stills_dir:
+        surface = args.surfaces[0]
+        out_dir = REPO / args.stills_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        idx = np.linspace(0, n_sim - 1, args.n_stills).round().astype(int)
+        for i, k in enumerate(idx):
+            fig = plt.figure(figsize=(6, 5.2))
+            ax = fig.add_subplot(111, projection="3d")
+            draw_panel(ax, sims[surface], refs[surface], int(k), surface, legend=True)
+            fig.tight_layout()
+            fig.savefig(out_dir / f"frame{i:02d}.png", dpi=110)
+            plt.close(fig)
+        print(f"saved {len(idx)} stills for '{surface}' -> {out_dir}")
 
     n = len(args.surfaces)
     fig = plt.figure(figsize=(5.2 * n, 4.6))
     axes = [fig.add_subplot(1, n, i + 1, projection="3d") for i in range(n)]
-    titles = {"table": "table — draw flat, gripper down",
-              "wall": "wall — draw upright, gripper forward"}
+    frame_idx = np.linspace(0, n_sim - 1, args.frames).round().astype(int)
 
     out = REPO / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
     frame_imgs = []
-    for k in range(args.frames):
+    for si in frame_idx:
         for ax, s in zip(axes, args.surfaces):
-            skels, trace, pens, errs = sims[s]
-            ref = refs[s]
-            ax.clear()
-            ax.plot(ref[:, 0], ref[:, 1], ref[:, 2], color="#4aa0ff", lw=2, label="reference")
-            tr = trace[: k + 1]
-            ax.plot(tr[:, 0], tr[:, 1], tr[:, 2], color="#ff7828", lw=2.5, label="EE trace")
-            sk = skels[k]
-            ax.plot(sk[:, 0], sk[:, 1], sk[:, 2], "-o", color="#333", ms=3, lw=2, label="arm")
-            ax.scatter([0], [0], [0], color="k", s=30)
-            tip, pen = trace[k], pens[k]
-            e = tip + 0.06 * pen
-            ax.plot([tip[0], e[0]], [tip[1], e[1]], [tip[2], e[2]], color="#d62728", lw=2)
-            ax.set_xlim(*XLIM); ax.set_ylim(*YLIM); ax.set_zlim(*ZLIM)
-            ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_zlabel("z")
-            ax.view_init(**VIEW)
-            ax.set_title(f"{titles.get(s, s)}\nerr {errs[k]*1e3:.3f} mm", fontsize=9)
-            if k == 0:
-                ax.legend(loc="upper left", fontsize=7)
+            draw_panel(ax, sims[s], refs[s], int(si), s, legend=(si == 0))
         fig.suptitle(f"FR3 tracking a {args.shape} (DLS IK, ~50 Hz)", fontsize=12)
         fig.tight_layout()
         fig.canvas.draw()

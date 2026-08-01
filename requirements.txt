@@ -3,4 +3,6 @@ yourdfpy>=0.0.56      # URDF parsing: joint origins, axes, limits (also used by 
 numpy>=1.26           # all kinematics math: FK, Jacobian, DLS solve
 scipy>=1.11           # SO(3) slerp + rotation conversions for trajectories
 matplotlib>=3.8       # tracking-error plots
+imageio>=2.31         # stitch tracking frames into the demo GIF (scripts/record_gif.py)
+xacro>=2.0            # M0 setup only: franka_description's create_urdf.py processes xacro
 pyroki @ git+https://github.com/chungmin99/pyroki.git  # validation only: independent FK/Jacobian cross-check (D1)

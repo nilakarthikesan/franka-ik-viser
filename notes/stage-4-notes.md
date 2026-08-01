@@ -235,29 +235,29 @@ Whether the design is *actually solving the task* is visible in six things:
 6. **Interactive mode:** switching snaps the gizmo to the fingertip (no jump), then the
    gizmo drives the arm.
 
-### The sequence: one full circle loop (playback, circle, speed 1×, default gains)
+### The sequence: one full circle loop on the `table` surface (default gains)
 
-Captured live from the running app, ~1 s apart, starting from a **Reset** (arm at
-`q_home`, trace cleared). The camera is fixed, so only the robot and target move.
+These six frames are rendered by `scripts/record_gif.py`, which drives the **exact**
+live pipeline (`trajectory.pose` → `solve_step` at 50 Hz) and draws the arm skeleton,
+the blue reference, the growing orange EE trace, and the red gripper "pen" axis. Using
+the headless renderer (rather than browser grabs) gives an unoccluded 3D view of the
+horizontal `table` loop; for the real app render see the live screenshots in §9.
 
 | frame | what the robot is doing |
 |---|---|
-| ![f0](../docs/images/frames/frame00.png) **0 — reset** | Arm at the home posture; the RGB target gizmo already sits at the circle's start point (top of the loop). Trace empty. Readout ≈ 0.005 mm — the arm converged from home onto the path in a fraction of a second (step-bounded, so smooth, not a snap). |
-| ![f1](../docs/images/frames/frame01.png) **1** | Target has advanced ~⅛ of the way round; the hand follows and the orange trace begins drawing an arc directly over the blue reference. Wrist has started to reorient. |
-| ![f2](../docs/images/frames/frame02.png) **2** | Roughly a quarter-loop of orange laid down, still glued to the blue circle. Shoulder and elbow are visibly repositioning to keep the fingertip on the path. |
-| ![f3](../docs/images/frames/frame03.png) **3** | The orange trace now closes into a near-complete ring coincident with the reference — the hand has traced most of the circle. |
-| ![f4](../docs/images/frames/frame04.png) **4** | Target on the far side of the loop; the arm has adopted a distinctly different posture (elbow up, wrist rolled) yet the fingertip is still exactly on the circle — this is the redundant 7th DOF being used to keep the *task* satisfied while the *posture* changes. |
-| ![f5](../docs/images/frames/frame05.png) **5** | Target climbing back toward the top; continuous reconfiguration, no jumps between this frame and the last. |
-| ![f6](../docs/images/frames/frame06.png) **6 — loop closed** | Back near the start; the orange trace overlays the entire blue circle. One clean period completed. |
+| ![f0](../docs/images/frames_table/frame00.png) **0 — start** | Arm reaching down to the start of the horizontal loop; the red pen axis points straight **down into** the drawing plane. Trace empty, err ≈ 0.000 mm — the solver is seeded on-path (in the app this convergence-from-home takes a fraction of a second, step-bounded and smooth). |
+| ![f1](../docs/images/frames_table/frame01.png) **1** | Target has advanced ~⅕ of the way round; the orange trace begins laying an arc directly over the blue reference. |
+| ![f2](../docs/images/frames_table/frame02.png) **2** | ~⅖ of the loop drawn, still glued to the blue circle. Shoulder and elbow visibly reposition to keep the fingertip on the path while the pen stays vertical. |
+| ![f3](../docs/images/frames_table/frame03.png) **3** | Most of the ring laid down and coincident with the reference; err ≈ 0.007 mm. |
+| ![f4](../docs/images/frames_table/frame04.png) **4** | Far side of the loop — the arm has adopted a distinctly different posture yet the fingertip is still exactly on the circle. This is the redundant 7th DOF keeping the *task* satisfied while the *posture* changes. |
+| ![f5](../docs/images/frames_table/frame05.png) **5 — loop closed** | Orange trace overlays the entire blue circle. One clean period completed, pen still pointing into the plane throughout. |
 
-Across the whole loop the readout never left the 0.001–0.006 mm / ~0.0001° band
-(sampled values from the live UI: 0.0017, 0.0027, 0.0034, 0.005, 0.0062 mm). That is
-the numeric confirmation of the visual overlap.
+Across the whole loop the position error stays in the single-digit-micrometre band
+(max 0.008 mm for `circle · table`, per `record.py`), the numeric confirmation of the
+visual overlap. The animated version (both surfaces) is the demo GIF in the README.
 
-![error readout](../docs/images/frames/frame07_error.png)
-
-*Money shot: the hand on the path with the live readout showing `Position 0.0034 mm`,
-`Rotation 0.0001 deg`.*
+*Real-app money shot (live Viser render + `Position (mm)` readout) lives in §9:*
+[`docs/images/surface_table.png`](../docs/images/surface_table.png).
 
 ### Live stress test: does the tuning actually do what M3 claims?
 
@@ -273,7 +273,9 @@ predicts, I dragged **Damping (λ) from 0.01 → 0.5** while the circle kept pla
 ![high damping](../docs/images/frames/frame08_highdamping.png)
 
 *λ = 0.5: the error jumps ~1500×, and you can see the gizmo (target) pull ahead of the
-fingertip — heavy damping shrinks each Δq step, so the arm lags the moving target.*
+fingertip — heavy damping shrinks each Δq step, so the arm lags the moving target.
+(Captured live on the earlier vertical circle; the damping trade-off is
+geometry-independent, so the demonstration still stands.)*
 
 This is exactly the accuracy-vs-conditioning trade-off from M3 §tuning, now visible in
 real time: damping buys robustness near singularities at the cost of tracking lag, and

@@ -1,5 +1,7 @@
 # franka-ik-viser
 
+[![CI](https://github.com/nilakarthikesan/franka-ik-viser/actions/workflows/ci.yml/badge.svg)](https://github.com/nilakarthikesan/franka-ik-viser/actions/workflows/ci.yml)
+
 Inverse kinematics on a Franka FR3 arm, implemented from scratch (damped least squares)
 and visualized live in [Viser](https://viser.studio). The end effector tracks sampled
 SE(3) reference trajectories, or an interactive drag gizmo.
