@@ -40,6 +40,7 @@ def wxyz_to_mat(wxyz: np.ndarray) -> np.ndarray:
 class GuiHandles:
     mode: object
     trajectory: object
+    surface: object
     speed: object
     pause: object
     reset: object
@@ -83,12 +84,13 @@ class Scene:
 
     def _build_gui(self) -> GuiHandles:
         g = self.server.gui
-        from .trajectory import TRAJECTORIES
+        from .trajectory import SHAPES, SURFACES
 
         with g.add_folder("Mode"):
             mode = g.add_dropdown("Mode", ("playback", "interactive"), initial_value="playback")
-            trajectory = g.add_dropdown("Trajectory", tuple(TRAJECTORIES.keys()),
-                                        initial_value="circle")
+            trajectory = g.add_dropdown("Trajectory", SHAPES, initial_value="circle")
+            surface = g.add_dropdown("Surface", SURFACES, initial_value="table",
+                                     hint="table = draw flat (pen down); wall = draw upright (pen forward)")
             speed = g.add_slider("Speed", min=0.0, max=3.0, step=0.05, initial_value=1.0)
             pause = g.add_button("Pause / Resume")
             reset = g.add_button("Reset")
@@ -114,8 +116,8 @@ class Scene:
         posture_gain.on_update(lambda _: setattr(self.config, "posture_gain", posture_gain.value))
         max_step.on_update(lambda _: setattr(self.config, "max_step", max_step.value))
 
-        return GuiHandles(mode, trajectory, speed, pause, reset, damping, step_scale,
-                          posture_gain, max_step, pos_err, rot_err)
+        return GuiHandles(mode, trajectory, surface, speed, pause, reset, damping,
+                          step_scale, posture_gain, max_step, pos_err, rot_err)
 
     # -- robot / target -----------------------------------------------------
 

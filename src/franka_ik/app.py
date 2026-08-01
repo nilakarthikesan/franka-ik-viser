@@ -1,13 +1,13 @@
 """Main entry point: ~50 Hz loop tying trajectory -> IK -> Viser together.
 
-Design and rationale: notes/stage-4-notes.md §3.
+Design and rationale: notes/stage-4-notes.md §3 and §9.
 
 Each frame:
-  target = trajectory(clock)          (playback)   or   gizmo pose (interactive)
-  q      = solver.solve_step(q, target)             one bounded step -> smooth
+  target = trajectory(shape, surface, clock)   (playback)  or  gizmo pose (interactive)
+  q      = solver.solve_step(q, target)                    one bounded step -> smooth
   scene.set_joint_config(q); update EE trace + mm/deg error readout
 
-Run:  python -m franka_ik.app
+Run:  PYTHONPATH=src python -m franka_ik.app
 """
 
 from __future__ import annotations
@@ -18,18 +18,11 @@ import numpy as np
 
 from .ik import DLSSolver, IKConfig
 from .robot_model import Q_HOME, FrankaModel
-from .trajectory import TRAJECTORIES
+from .trajectory import pose, reference_points
 from .visualizer import Scene
 
 HZ = 50.0
 DT = 1.0 / HZ
-REFERENCE_SAMPLES = 200
-
-
-def _reference_points(traj_name: str, n: int = REFERENCE_SAMPLES) -> np.ndarray:
-    fn = TRAJECTORIES[traj_name]
-    period = fn.__defaults__[0]  # first default arg is `period`
-    return np.array([fn(period * k / n)[:3, 3] for k in range(n + 1)])
 
 
 def main() -> None:
@@ -41,8 +34,14 @@ def main() -> None:
     q = Q_HOME.copy()
     scene.set_joint_config(q)
 
-    state = {"clock": 0.0, "paused": False, "mode": "playback", "traj": "circle"}
-    scene.draw_reference(_reference_points(state["traj"]))
+    state = {"clock": 0.0, "paused": False, "mode": "playback",
+             "shape": "circle", "surface": "table"}
+    scene.draw_reference(reference_points(state["shape"], state["surface"]))
+
+    def restart_path() -> None:
+        state["clock"] = 0.0
+        scene.clear_trace()
+        scene.draw_reference(reference_points(state["shape"], state["surface"]))
 
     @scene.gui.pause.on_click
     def _(_):
@@ -58,10 +57,13 @@ def main() -> None:
 
     @scene.gui.trajectory.on_update
     def _(_):
-        state["traj"] = scene.gui.trajectory.value
-        state["clock"] = 0.0
-        scene.clear_trace()
-        scene.draw_reference(_reference_points(state["traj"]))
+        state["shape"] = scene.gui.trajectory.value
+        restart_path()
+
+    @scene.gui.surface.on_update
+    def _(_):
+        state["surface"] = scene.gui.surface.value
+        restart_path()
 
     @scene.gui.mode.on_update
     def _(_):
@@ -79,7 +81,7 @@ def main() -> None:
         if state["mode"] == "playback":
             if not state["paused"]:
                 state["clock"] += scene.gui.speed.value * DT
-            T_des = TRAJECTORIES[state["traj"]](state["clock"])
+            T_des = pose(state["shape"], state["surface"], state["clock"])
             scene.set_target(T_des)
         else:
             T_des = scene.target_pose()

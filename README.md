@@ -33,10 +33,12 @@ python scripts/render_m1.py
 # Test trajectories + end-to-end tracking (reachability, continuity, error bars)
 python scripts/test_trajectory.py
 
-# Run the live IK demo (opens a Viser tab: playback + interactive gizmo modes)
+# Run the live IK demo (opens a Viser tab: playback + interactive gizmo modes).
+# Pick a shape (circle / figure-8 / lissajous) AND a Surface: table (draw flat,
+# gripper down) or wall (draw upright, gripper forward) — see notes §9.
 PYTHONPATH=src python -m franka_ik.app
 
-# Record tracking-error artifacts (CSV + plots in outputs/) for every trajectory
+# Record tracking-error artifacts (CSV + plots in outputs/) for every shape x surface
 PYTHONPATH=src python -m franka_ik.record --all --periods 2
 ```
 
@@ -50,6 +52,6 @@ PYTHONPATH=src python -m franka_ik.record --all --periods 2
 - [x] M1 robot renders in Viser with joint sliders (`scripts/render_m1.py`)
 - [x] M2 from-scratch FK/Jacobian validated: 9/9 checks vs. yourdfpy, PyRoKi, finite differences, scipy (`scripts/validate_kinematics.py`)
 - [x] M3 DLS solver: 50/50 static targets < 1 mm / 0.5 deg; circle tracking at 0.006 mm max error, 12/12 tests (`scripts/test_ik.py`)
-- [x] M4 trajectory tracking (circle / figure-8 / lissajous): 11/11 tests, all paths < 0.011 mm / 0.001 deg (`scripts/test_trajectory.py`, `src/franka_ik/{trajectory,app}.py`)
-- [x] M5 interactive gizmo mode + live traces, tuning sliders, error readout (`src/franka_ik/visualizer.py`)
+- [x] M4 trajectory tracking (circle / figure-8 / lissajous on `table`/`wall` surfaces): 18/18 tests, all 12 combos < 0.031 mm / 0.005 deg (`scripts/test_trajectory.py`, `src/franka_ik/{trajectory,app}.py`)
+- [x] M5 interactive gizmo mode + live traces, tuning sliders, error readout, selectable drawing surface (`src/franka_ik/visualizer.py`)
 - [ ] M6 recording + writeup (recorder done: `src/franka_ik/record.py` -> `outputs/`)

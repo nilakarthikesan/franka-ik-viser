@@ -1,109 +1,141 @@
-"""SE(3) reference trajectory sampling for the end effector.
+"""SE(3) reference trajectories for the end effector, on selectable surfaces.
 
-Design and rationale: notes/stage-4-notes.md §1.
+Design and rationale: notes/stage-4-notes.md §1 and §9.
 
-Each trajectory is a pure function (t, period, radius) -> 4x4 world->EE pose,
-periodic in t so playback loops seamlessly. All paths live in a reachable
-region in front of the FR3 base (centered ~[0.45, 0, 0.45] m, radius <= 0.12 m,
-well inside the ~0.85 m reach and away from the singular stretched boundary).
+A trajectory is a moving target pose T_des(t). Each is built from two choices:
 
-Default orientation is the home end-effector orientation (gripper down/forward),
-so frame 0 of every path is trivially reachable from q_home. Only `lissajous`
-varies orientation, slerping between keyframes to exercise rotation tracking.
+  shape   in-plane curve: circle, figure-8 (Gerono lemniscate), or lissajous (3D)
+  surface where/how it is drawn, which sets the plane AND the tool orientation so
+          the gripper "pen" points INTO the drawing plane (not flat along it):
+            - table : horizontal circle (XY), gripper points straight down
+            - wall  : vertical circle (YZ) facing the robot, gripper points forward
+
+Both surfaces use centers/radii chosen so every sample is comfortably reachable by
+the FR3 (verified in scripts/test_trajectory.py; explored in
+scripts/preview_orientations.py). Only lissajous varies orientation (a small slerp
+wobble about the surface pose) so it still exercises rotation tracking.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.spatial.transform import Rotation, Slerp
 
 from .robot_model import DEFAULT_URDF, EE_FRAME, Q_HOME
 
-CENTER = np.array([0.45, 0.0, 0.45])
+SHAPES = ("circle", "figure-8", "lissajous")
+_PERIODS = {"circle": 8.0, "figure-8": 12.0, "lissajous": 15.0}
+
+# Gripper approach axis (tool local +z) aligned with world +x -> points forward.
+_R_FORWARD = np.array([[0.0, 0.0, 1.0],
+                       [0.0, -1.0, 0.0],
+                       [1.0, 0.0, 0.0]])
+
+# lissajous orientation-wobble keyframes (rad), revisited so the cycle is periodic.
+_WOBBLE_TIMES = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+_WOBBLE_ROTVECS = np.array([[0.0, 0.0, 0.0], [0.35, 0.0, 0.0], [0.0, 0.35, 0.0],
+                            [-0.35, 0.0, 0.0], [0.0, 0.0, 0.0]])
 
 
 def _home_orientation() -> np.ndarray:
-    """Orientation of the end effector at q_home (cached), as a 3x3 matrix.
-
-    Imported lazily and cached so trajectories carry no import-time cost and no
-    hard dependency on a loaded model for callers that only want positions.
-    """
-    global _HOME_R
+    """End-effector orientation at q_home (cached): the gripper-straight-down pose."""
+    global _R_DOWN
     try:
-        return _HOME_R
+        return _R_DOWN
     except NameError:
         pass
     import yourdfpy
 
-    urdf = yourdfpy.URDF.load(DEFAULT_URDF, load_meshes=False)
     from .robot_model import FrankaModel
 
+    urdf = yourdfpy.URDF.load(DEFAULT_URDF, load_meshes=False)
     model = FrankaModel()
     urdf.update_cfg({n: Q_HOME[i] for i, n in enumerate(model.joint_names)})
-    _HOME_R = urdf.get_transform(EE_FRAME, urdf.base_link)[:3, :3].copy()
-    return _HOME_R
+    _R_DOWN = urdf.get_transform(EE_FRAME, urdf.base_link)[:3, :3].copy()
+    return _R_DOWN
 
 
-def _pose(p: np.ndarray, R: np.ndarray | None = None) -> np.ndarray:
+@dataclass(frozen=True)
+class Surface:
+    """A drawing surface: where the plane sits and how the tool is held."""
+
+    center: np.ndarray
+    radius: float
+    axes: np.ndarray       # 3x3, columns map in-plane (u, v) and depth (w) to world
+    orientation: np.ndarray  # 3x3 constant tool orientation (pen INTO the plane)
+
+    def place(self, uvw: np.ndarray) -> np.ndarray:
+        return self.center + self.axes @ uvw
+
+    @property
+    def normal(self) -> np.ndarray:
+        return self.axes[:, 2]
+
+
+def _surfaces() -> dict[str, Surface]:
+    global _SURFACES
+    try:
+        return _SURFACES
+    except NameError:
+        pass
+    R_down = _home_orientation()
+    _SURFACES = {
+        # u->x, v->y, w->z : horizontal disk on a 'table', pen points down (-z)
+        "table": Surface(center=np.array([0.45, 0.0, 0.35]), radius=0.12,
+                         axes=np.eye(3), orientation=R_down),
+        # u->y, v->z, w->x : vertical disk facing the robot, pen points forward (+x)
+        "wall": Surface(center=np.array([0.5, 0.0, 0.5]), radius=0.10,
+                        axes=np.array([[0.0, 0.0, 1.0],
+                                       [1.0, 0.0, 0.0],
+                                       [0.0, 1.0, 0.0]]),
+                        orientation=_R_FORWARD),
+    }
+    return _SURFACES
+
+
+SURFACES = ("table", "wall")
+
+
+def period_of(shape: str) -> float:
+    return _PERIODS[shape]
+
+
+def _shape_uvw(shape: str, t: float, period: float, radius: float) -> np.ndarray:
+    """In-plane (u, v) and depth (w) offsets for a shape at time t."""
+    ang = 2.0 * np.pi * t / period
+    if shape == "circle":
+        return np.array([radius * np.cos(ang), radius * np.sin(ang), 0.0])
+    if shape == "figure-8":
+        return np.array([radius * np.cos(ang), 0.5 * radius * np.sin(2.0 * ang), 0.0])
+    if shape == "lissajous":
+        return np.array([0.5 * radius * np.sin(ang),
+                         radius * np.sin(2.0 * ang),
+                         0.6 * radius * np.sin(3.0 * ang)])
+    raise ValueError(f"unknown shape {shape!r}")
+
+
+def _orientation(shape: str, surface: Surface, t: float, period: float) -> np.ndarray:
+    if shape != "lissajous":
+        return surface.orientation
+    base = Rotation.from_matrix(surface.orientation)
+    keys = Rotation.from_rotvec(_WOBBLE_ROTVECS) * base
+    slerp = Slerp(_WOBBLE_TIMES, keys)
+    return slerp([(t / period) % 1.0])[0].as_matrix()
+
+
+def pose(shape: str, surface: str, t: float, period: float | None = None) -> np.ndarray:
+    """World -> EE target pose (4x4) for a shape drawn on a surface at time t."""
+    s = _surfaces()[surface]
+    period = _PERIODS[shape] if period is None else period
     T = np.eye(4)
-    T[:3, :3] = _home_orientation() if R is None else R
-    T[:3, 3] = p
+    T[:3, :3] = _orientation(shape, s, t, period)
+    T[:3, 3] = s.place(_shape_uvw(shape, t, period, s.radius))
     return T
 
 
-def circle(t: float, period: float = 8.0, radius: float = 0.12) -> np.ndarray:
-    """Circle in the YZ plane, centered in front of the base. Fixed orientation."""
-    ang = 2.0 * np.pi * t / period
-    p = CENTER + np.array([0.0, radius * np.cos(ang), radius * np.sin(ang)])
-    return _pose(p)
-
-
-def figure_eight(t: float, period: float = 12.0, radius: float = 0.12) -> np.ndarray:
-    """Gerono lemniscate (figure-8) in the YZ plane. Fixed orientation.
-
-    y = r cos(theta), z = (r/2) sin(2 theta): closed, self-crossing, with
-    sign-changing curvature and non-uniform speed -- a harder path than a circle.
-    """
-    ang = 2.0 * np.pi * t / period
-    p = CENTER + np.array([0.0, radius * np.cos(ang), 0.5 * radius * np.sin(2.0 * ang)])
-    return _pose(p)
-
-
-# Orientation keyframes for the lissajous path: home orientation plus small
-# tilts about x and y, revisited so the cycle is periodic (last == first).
-_LISSAJOUS_KEY_TIMES = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
-_LISSAJOUS_KEY_ROTVECS = np.array([
-    [0.0, 0.0, 0.0],
-    [0.4, 0.0, 0.0],
-    [0.0, 0.4, 0.0],
-    [-0.4, 0.0, 0.0],
-    [0.0, 0.0, 0.0],
-])
-
-
-def lissajous(t: float, period: float = 15.0, radius: float = 0.12) -> np.ndarray:
-    """3D Lissajous path with orientation slerped between keyframes.
-
-    Position: x, y, z sinusoids at 1:2:3 frequencies (a bounded 3D curve).
-    Orientation: shortest-arc slerp through small tilt keyframes, so this is the
-    one path that exercises rotation tracking, not just translation.
-    """
-    ang = 2.0 * np.pi * t / period
-    p = CENTER + np.array([
-        0.5 * radius * np.sin(ang),
-        radius * np.sin(2.0 * ang),
-        0.6 * radius * np.sin(3.0 * ang),
-    ])
-
-    key_rots = Rotation.from_rotvec(_LISSAJOUS_KEY_ROTVECS) * Rotation.from_matrix(_home_orientation())
-    slerp = Slerp(_LISSAJOUS_KEY_TIMES, key_rots)
-    phase = (t / period) % 1.0
-    R = slerp([phase])[0].as_matrix()
-    return _pose(p, R)
-
-
-TRAJECTORIES = {
-    "circle": circle,
-    "figure-8": figure_eight,
-    "lissajous": lissajous,
-}
+def reference_points(shape: str, surface: str, n: int = 200) -> np.ndarray:
+    """(n+1, 3) sampled positions of one full period, for drawing the reference."""
+    period = _PERIODS[shape]
+    return np.array([pose(shape, surface, period * k / n)[:3, 3] for k in range(n + 1)])

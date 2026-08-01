@@ -276,6 +276,86 @@ the chosen default (λ = 0.01) sits in the sweet spot. Restoring the slider snap
 error straight back to micrometres, confirming the whole path
 `slider → IKConfig → solve_step → rendered arm → readout` is live and correct.
 
+## 9. Drawing surfaces: `table` vs `wall`
+
+### The observation that motivated this
+
+Watching the frame-by-frame loop in §8, the numbers were perfect (< 0.006 mm) but the
+motion did **not** read as *drawing*. The reason was geometric, not a solver bug: the
+original circle lived in a vertical plane while the gripper kept the home orientation
+(pointing straight **down**). So the tool's approach axis lay **flat in** the drawing
+plane instead of pointing **into** it — the fingertip skated around a ring edge-on, like
+waving a pen sideways rather than pressing it to paper.
+
+To localize this precisely I compared the tool approach axis (FK `T_tcp`'s local +z)
+against the plane normal. Flat-in-plane ⇒ ~90°; pen-into-plane ⇒ ~0°. This is now a
+permanent regression check, **TR5** in `scripts/test_trajectory.py`, so the geometry can
+never silently regress again. It also answers "which stage owns this?" — it's the
+**trajectory** stage (plane + tool orientation), not the FK, Jacobian, or solver, all of
+which were already validated.
+
+### The fix: pick the plane and the tool orientation together
+
+A trajectory is now `shape × surface`. The **shape** is the in-plane curve
+(`circle`, `figure-8`, `lissajous`); the **surface** fixes both *where* the plane sits
+and *how the tool is held* so the pen always stabs into the disk:
+
+| surface | plane | gripper "pen" points | center | radius | reads as |
+|---|---|---|---|---|---|
+| **table** | horizontal (XY) | straight **down** (−z) | (0.45, 0, 0.35) | 0.12 m | drawing on a tabletop |
+| **wall** | vertical (YZ), faces robot | **forward** (+x) | (0.50, 0, 0.50) | 0.10 m | drawing on a whiteboard |
+
+Both centers/radii were chosen empirically for full reachability across all three shapes
+(the earlier "wall" at (0.45,0,0.45)/0.12 m poked past the FR3's wrist limits — max
+11.8 mm error; the shipped (0.50,0,0.50)/0.10 m sits at < 0.1 mm everywhere). `circle`
+and `figure-8` hold a constant tool orientation; `lissajous` adds a small ±0.35 rad slerp
+wobble about the surface pose so it still exercises **rotation** tracking.
+
+### Design preview (both surfaces, pen axis drawn)
+
+`scripts/preview_orientations.py` renders the arm skeleton, the reference circle, and the
+gripper "pen" arrows at points around each loop. Orange arrows stabbing *through* the
+blue disk = drawing; lying flat = waving. Both are fully reachable and the pen sits at
+**0.0° to the plane normal** (into the disk) on both surfaces:
+
+![orientation preview](../docs/images/orientation_preview.png)
+
+```
+TABLE (horizontal, pen down):  reachable=True, max err 0.006 mm, tool-vs-normal 0.0°
+WALL  (vertical, pen forward): reachable=True, max err 0.067 mm, tool-vs-normal 0.0°
+```
+
+### Live in the app (new `Surface` dropdown)
+
+Both versions ship in the live demo. A **Surface** dropdown (next to **Trajectory**) lets
+whoever is interacting switch between them on the fly; changing it clears the trace and
+redraws the reference, so playback restarts cleanly on the new surface. Interactive-gizmo
+mode is unaffected (the target is whatever the user drags).
+
+| `table` — draw flat, gripper down | `wall` — draw upright, gripper forward |
+|---|---|
+| ![table](../docs/images/surface_table.png) | ![wall](../docs/images/surface_wall.png) |
+
+Left: the arm reaches down and the fingertip traces a horizontal loop, tool pointing into
+the tabletop. Right: the arm reaches forward and traces the vertical loop (orange arc),
+tool pointing into the wall. Live tracking readout stayed at ~0.003–0.006 mm while
+switching.
+
+### Tracking holds on both surfaces
+
+`PYTHONPATH=src python -m franka_ik.record --all` records every `shape × surface` combo.
+All twelve stay far under the 1 mm / 0.5° bar:
+
+| combo | max pos err | combo | max pos err |
+|---|---|---|---|
+| circle · table | 0.008 mm | circle · wall | 0.031 mm |
+| figure-8 · table | 0.006 mm | figure-8 · wall | 0.031 mm |
+| lissajous · table | 0.011 mm | lissajous · wall | 0.013 mm |
+
+`scripts/test_trajectory.py` now loops both surfaces for every isolated and pipeline check
+(**18/18 pass**), including TR5 (pen-into-plane) and TR4 (reachability 12/12 per combo).
+M2 (9/9) and M3 (12/12) regression gates still green.
+
 ### Verdict against the task
 
 The assignment asks for an IK solver driving a Franka to **track sampled SE(3)
