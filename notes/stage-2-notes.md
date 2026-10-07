@@ -1,9 +1,9 @@
-# Stage 2 Notes — FK and the Jacobian, from scratch and proven correct (M2)
+# Stage 2 Notes — FK and the Jacobian, implemented and numerically validated (M2)
 
 Companion notes to [DESIGN.md §2/§4-D1](../DESIGN.md). Stage 1 established *what* the
 problem is; this stage designs the mathematical foundation everything else stands on:
 forward kinematics and the geometric Jacobian, implemented by us in numpy inside
-[robot_model.py](../src/franka_ik/robot_model.py), and **proven correct** before the IK
+[robot_model.py](../src/franka_ik/robot_model.py), and **checked numerically** before the IK
 solver is allowed to build on them. If these two functions are right, differential IK
 is a 30-line loop. If they're subtly wrong, nothing downstream will ever work and the
 bug will be miserable to find — which is why validation is half of this stage.
@@ -185,9 +185,7 @@ Plus module-level helpers with doctests-in-spirit: `rotation_about_axis`, `rpy_t
 
 M2 is done when `scripts/validate_kinematics.py` prints all-green tables for checks
 A-C (D optional) and `robot_model.py` has no remaining `NotImplementedError`. The
-solver stage then consumes exactly three guarantees established here: `fk` is truth,
-`jacobian` matches `fk` differentially, and `pose_error` speaks the same frame
-convention as `jacobian`. Everything hard about M3 will be tuning, not correctness.
+solver stage uses three numerically checked components: FK matches the comparison implementations on sampled configurations, the Jacobian agrees with numerical derivatives, and pose error uses the same frame convention. Solver correctness and convergence still require separate tests.
 
 ---
 
@@ -244,5 +242,4 @@ Other implementation notes for the record:
   passes, the M1 render server still serves, and our `fk(q_home)` reproduces
   Stage 1's yourdfpy number exactly ([0.307, 0, 0.4869] m).
 
-Design risk "our FK/Jacobian is wrong" is retired. M3 (the DLS solver) can now treat
-`fk`, `jacobian`, and `pose_error` as ground truth.
+The sampled checks reduce the risk of an FK/Jacobian implementation error. M3 uses these functions as numerical references; broader tests remain useful.

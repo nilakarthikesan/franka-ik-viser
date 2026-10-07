@@ -116,7 +116,7 @@ is the method we implement (details are Stage 2 material; the design doc §2 has
 | Mode | Source | Why it exists |
 |---|---|---|
 | **Playback** | Parametric trajectory (circle, figure-8) evaluated at time t | The assignment's literal ask: "sample an EE pose trajectory." Repeatable → measurable → we can plot tracking error |
-| **Interactive** | A drag gizmo in the Viser browser UI | Makes the demo compelling and proves the solver handles *arbitrary* targets, not just curated paths |
+| **Interactive** | A drag gizmo in the Viser browser UI | Supports target inspection; convergence still depends on reachability and solver configuration |
 
 Both modes produce the identical thing — a 4×4 pose — so everything downstream of the
 target is one code path. That's a deliberate architecture choice: the solver never knows
@@ -160,7 +160,7 @@ stutter, no wild elbow swings, no drift. This is what "she" will actually see fi
 - *Static solves:* from a random start, converge to a random reachable target within
   **< 1 mm position and < 0.5° orientation** error. Why these numbers? They're far
   tighter than anything visible on screen and comparable to real manipulator
-  repeatability (~0.1 mm) scales — tight enough to prove the math is right, loose enough
+  repeatability (~0.1 mm) scales — tight enough to detect numerical inconsistencies, loose enough
   to be achievable in a bounded number of iterations.
 - *Tracking:* during playback, error stays at the mm / sub-degree level throughout.
   Tracking error is *expected* to be nonzero — we take one solver step per frame while
@@ -199,10 +199,8 @@ Every tool choice in this project was run through four questions:
    linear algebra) — the assignment explicitly permits this.
 2. **Can anyone install it?** (reproducibility) — prefer pure `pip install`, no conda,
    no Docker, no ROS.
-3. **Does it strengthen or weaken the story?** — "I wrote FK myself and proved it
-   correct" beats "I called a library" for a skills-demonstration project.
-4. **What's the risk, and is it retired early?** — anything we hand-roll needs a
-   validation plan before the rest of the system builds on it.
+3. **Does it support the learning objective?** — implementing FK provides practice with transforms and Jacobians; independent library comparisons help detect errors.
+4. **What validation does it need?** — custom components require numerical checks before other components depend on them.
 
 ### The chosen stack
 
@@ -212,7 +210,7 @@ Every tool choice in this project was run through four questions:
 | **Viser** (v1.0.27) | Browser 3D visualization: robot rendering (`ViserUrdf`), drag gizmo, GUI sliders, traces | Named in the assignment. Web-based (demo = a URL), pure pip, actively maintained, citable (arXiv:2507.22885) |
 | **franka_description** | The kinematic model (URDF + meshes), pinned in `assets/` | Named in the assignment; it's the official source of the robot's geometry |
 | **yourdfpy** | URDF parsing (joint origins, axes, limits) | Already a Viser dependency — we get the parsed kinematic tree for free |
-| **PyRoKi** | *Validation only*: independent FK/Jacobian to cross-check ours | Pip-installable, from the Viser team, IROS 2025 paper (arXiv:2505.03728). Gives numerical proof our from-scratch kinematics is correct |
+| **PyRoKi** | *Validation only*: independent FK/Jacobian to cross-check ours | Pip-installable, from the Viser team, IROS 2025 paper (arXiv:2505.03728). Provides an independent numerical comparison on sampled configurations |
 | **matplotlib** | Tracking-error plots for the artifact | Standard |
 
 ### The one contested decision (D1): who computes FK and the Jacobian?
@@ -275,7 +273,7 @@ numpy 2.5.1, matplotlib, PyRoKi + JAX. No conda — decision D1's pure-pip claim
 
 With the problem understood, the pipeline ahead is:
 
-1. **Stage 1 (this):** problem, terms, I/O, success criteria, tooling rationale ✓
+1. **Stage 1 (this):** problem, terms, I/O, success criteria, tooling rationale 
 2. **Stage 2:** the math of the solver — pose error via the SE(3) log map, the geometric
    Jacobian column formula, why damped least squares, the nullspace trick (DESIGN.md §2)
 3. **Stage 3:** setup — environment, URDF generation, repo creation (milestone M0)

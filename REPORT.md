@@ -6,8 +6,7 @@ geometric Jacobian, and a damped least-squares (DLS) inverse-kinematics solver w
 nullspace posture task — and drives it live in a [Viser](https://viser.studio) browser
 visualization. The end effector tracks sampled SE(3) reference trajectories (circle,
 figure-8, lissajous) on two selectable drawing surfaces, or an interactive drag gizmo.
-Every hand-written kinematics result is cross-validated against an independent toolkit
-(PyRoKi) and finite differences, and end-to-end tracking holds to **micrometre scale**.
+The reported numerical checks compare sampled configurations with PyRoKi and finite differences. Tracking errors are computed in the kinematic model; they do not measure physical robot accuracy.
 
 ![tracking demo](docs/images/tracking.gif)
 
@@ -60,7 +59,7 @@ trajectory.pose(shape, surface, t)  ──►  T_des ∈ SE(3)
 A reproducible Python (≥3.10) environment; the official `franka_description` is cloned
 and the FR3 URDF generated with relative mesh paths (`scripts/generate_urdf.py`). The arm
 renders in Viser with joint sliders (`scripts/render_m1.py`), which also gives a visual
-ground truth for the EE frame.
+reference for the EE frame.
 
 ### M2 — Forward kinematics & the geometric Jacobian (from scratch)
 FK composes the per-joint homogeneous transforms parsed from the URDF (fixed origins ×
@@ -133,7 +132,7 @@ precision.
 
 **Static IK (M3):** 50/50 random reachable targets < 1 mm / 0.5°; 12/12 solver tests.
 
-**Trajectory tracking (M4/M5): 18/18 tests.** All twelve `shape × surface` combinations
+**Trajectory tracking (M4/M5): 18/18 tests reported.** The six `shape × surface` combinations, each exercised over two periods,
 track far under the 1 mm / 0.5° bar:
 
 | combo | max position error | combo | max position error |
@@ -146,8 +145,7 @@ track far under the 1 mm / 0.5° bar:
 |---|---|
 | ![table](docs/images/tracking_circle-table.png) | ![wall](docs/images/tracking_circle-wall.png) |
 
-The reference (blue) and achieved (orange) curves are visually indistinguishable; the
-error trace stays in the single-digit-micrometre band across the loop. The `lissajous`
+The reference (blue) and calculated end-effector (orange) curves nearly overlap at the plotted scale. Reported maximum errors across the paths range from 0.006 to 0.031 mm. The `lissajous`
 path additionally confirms **orientation** tracking under a moving frame:
 
 ![lissajous](docs/images/tracking_lissajous-table.png)
@@ -183,11 +181,9 @@ path additionally confirms **orientation** tracking under a moving frame:
 - **DLS over the raw pseudoinverse** — trades a tiny steady-state error for singularity
   robustness (visible in the live λ stress test in `notes/stage-4-notes.md` §8: raising
   damping to 0.5 makes the arm lag the target ~1500×, then snaps back when restored).
-- **Nullspace posture over hard postural constraints** — keeps the arm comfortable without
-  ever compromising the task; the redundant DOF is visibly reconfiguring while the
+- **Nullspace posture over hard postural constraints** — keeps the arm comfortable while minimizing changes to the primary task locally; the redundant DOF is visibly reconfiguring while the
   fingertip stays glued to the path.
-- **Bounded `solve_step` per frame over solve-to-convergence** — guarantees smooth,
-  jump-free animation and mirrors how a real controller would run.
+- **Bounded `solve_step` per frame over solve-to-convergence** — bounds numerical joint updates; a physical controller would require additional dynamics and motion-limit handling.
 - **From-scratch FK/Jacobian, validated against PyRoKi** — the assignment's core; PyRoKi
   and finite differences are used only as independent oracles, never in the solver.
 
@@ -203,10 +199,9 @@ path additionally confirms **orientation** tracking under a moving frame:
   stall at a limit rather than finding a global reconfiguration.
 - **Second-order / weighted tasks** — a task-priority stack or weighted DLS could trade off
   position vs orientation explicitly.
-- **CI** — the three gates (`validate_kinematics`, `test_ik`, `test_trajectory`) are ideal
-  for a GitHub Actions workflow to keep them green automatically.
+- **Numerical coverage** — tests sample reachable configurations and selected trajectories. They do not establish global convergence or hardware-safe motion. The repository includes a CI workflow for repeatable checks.
 
-See §"Additional testing that could be done" in the chat notes for concrete next tests.
+Possible extensions include collision checks, motion limits, and broader pose/trajectory coverage.
 
 ---
 

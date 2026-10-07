@@ -2,7 +2,7 @@
 
 Companion notes to [DESIGN.md §2](../DESIGN.md). This is the stage the assignment is
 actually about: everything before it (URDF, FK, Jacobian) was scaffolding so that this
-one algorithm could be written and trusted. Stage 2 ended by *proving* `fk`, `jacobian`,
+one algorithm could be written and trusted. Stage 2 ended by numerically checking `fk`, `jacobian`,
 and `pose_error` correct, which changes the character of the work here — bad behavior in
 this stage is a **tuning** problem, not a correctness hunt.
 
@@ -127,7 +127,7 @@ DESIGN.md §1 originally sketched the error as the body-frame SE(3) log
 \( \log_6(T_{ee}^{-1}T_{des}) \). Stage 2 deliberately chose the **world-frame
 decoupled** convention instead — \( e = [\,p_{des}-p_{cur};\ \mathrm{rotvec}(R_{des}R_{cur}^\top)\,] \)
 — because it pairs with our world-frame geometric Jacobian, needs only an SO(3) log,
-and allows independent position/rotation weighting. Stage 2's check F already proved
+and allows independent position/rotation weighting. Stage 2's check F already verified numerically
 the pairing consistent to first order. Both conventions are valid; *mixing* them is
 the classic differential-IK bug, so the solver docstrings state the choice explicitly.
 
@@ -142,7 +142,7 @@ Two layers, run by [scripts/test_ik.py](../scripts/test_ik.py).
 | T1 | Fixed point: at the solution, \( \|\Delta q\| \approx 0 \) | a solver that drifts when already correct is broken |
 | T2 | Static convergence: random reachable targets (generated as `fk(q_target)` so reachability is guaranteed) from random starts; require < 1 mm / < 0.5° | the M3 acceptance bar from DESIGN.md §1 |
 | T3 | Joint limits respected at every iteration | output must be physically legal |
-| T4 | Step bound: \( \max_i|\Delta q_i| \le \) `max_step` always | smoothness guarantee for the demo |
+| T4 | Step bound: \( \max_i|\Delta q_i| \le \) `max_step` always | per-step numerical joint-update bound |
 | T5 | Singularity robustness: start stretched/aligned, target far; no NaN/Inf, steps stay bounded | the reason damping exists |
 | T6 | Nullspace behaviour: with the task converged, posture pull reduces \( \|q - q_{home}\| \) while pose error stays below tolerance | proves the projector really is task-neutral |
 | T7 | Unreachable target (2 m away): error plateaus, no divergence, limits respected | graceful failure |
@@ -160,7 +160,7 @@ Two layers, run by [scripts/test_ik.py](../scripts/test_ik.py).
 ## 8. Results: two textbook-formula failures found and fixed
 
 The first run of the suite failed three tests — all traced to the *textbook* update,
-not to bugs in our math (M2's guarantee held: no kinematics suspicion needed).
+rather than to the kinematics implementation in the sampled validation checks. Further kinematics checks would still be appropriate if later evidence suggested a discrepancy.
 
 **Failure 1 — naive limit clipping stalls solves (T2: 41/50 from home, 21/50 from
 random).** Diagnosis: failed solves sat pinned at a joint limit (typically joint 4,

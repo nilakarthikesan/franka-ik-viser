@@ -2,12 +2,12 @@
 
 Companion notes to [DESIGN.md §3.3–3.5](../DESIGN.md). This is the stage where the
 project becomes *visible*: the validated solver (M3) is wired to a moving target and a
-browser renderer, so the FR3 physically traces reference paths. Stages 1–3 built and
-proved every piece; here we assemble them and add the two things the assignment asks
+browser renderer, so the modeled FR3 traces reference paths. Stages 1–3 implemented and
+checked the numerical components; here we assemble them and add the two things the assignment asks
 for by name — sampled pose trajectories and Viser visualization — plus the offline
 recorder that produces the artifact.
 
-Because M3 already proved `solve_step` tracks a circle at 0.006 mm, the risk in this
+Because M3 reported that `solve_step` tracks a circle at 0.006 mm, the risk in this
 stage is *not* the IK math. It is (a) building trajectories that stay reachable, (b)
 wiring Viser correctly (joint ordering, quaternion conventions, gizmo feedback loops),
 and (c) keeping a real-time loop smooth. The tests target exactly those.
@@ -122,7 +122,7 @@ Same two-layer pattern as M2/M3, in [scripts/test_trajectory.py](../scripts/test
 | TR1 | every sampled pose is a valid SE(3): R orthonormal, det +1 | a malformed target would poison the solver |
 | TR2 | continuity: consecutive samples at 50 Hz are close in position and rotation | discontinuities would demand infinite joint velocity |
 | TR3 | periodicity: \( T_{des}(0) = T_{des}(\text{period}) \) | playback must loop seamlessly |
-| TR4 | reachability: a static `solve` converges to samples spanning each path | proves the path lives in the workspace, not asserted |
+| TR4 | reachability: a static `solve` converges to samples spanning each path | checks reachability at sampled path poses |
 
 **Pipeline (tracking + integration):**
 
@@ -351,7 +351,7 @@ switching.
 ### Tracking holds on both surfaces
 
 `PYTHONPATH=src python -m franka_ik.record --all` records every `shape × surface` combo.
-All twelve stay far under the 1 mm / 0.5° bar:
+The six shape/surface combinations stay below the 1 mm / 0.5° bar in the reported runs:
 
 | combo | max pos err | combo | max pos err |
 |---|---|---|---|
@@ -368,5 +368,5 @@ M2 (9/9) and M3 (12/12) regression gates still green.
 The assignment asks for an IK solver driving a Franka to **track sampled SE(3)
 trajectories**, visualized live, with an **interactive** target. All of that is
 demonstrated above: three trajectories tracked to < 0.011 mm / 0.001° (§6), the live
-browser demo with playback + interactive gizmo modes, tuning that provably affects the
+browser demo with playback + interactive gizmo modes, tuning that measurably affects the
 result, and the recorded CSV/plot artifacts. Design objective met.
